@@ -86,7 +86,7 @@ app.post("/api/requests/:id/approve", auth, async (req, res) => {
     return res.status(409).json({ error: "Request is not awaiting approval." });
   const reserved = Object.values(rows)
     .filter((x) =>
-      ["SENDING", "SUBMITTED", "SUCCESS", "UNCLAIMED"].includes(x.state),
+      ["SENDING", "SUBMITTED", "SUCCESS", "UNCLAIMED", "REVIEW_REQUIRED"].includes(x.state),
     )
     .reduce((s, x) => s + x.amountMinor, 0);
   if (reserved + item.amountMinor > POLICY.budgetMinor)
@@ -155,7 +155,7 @@ app.get("/api/requests/:id/status", auth, async (req, res) => {
 app.post("/api/requests/:id/reconcile", auth, (req, res) => {
   const item = rows[req.params.id];
   if (!item) return res.status(404).json({ error: "Request not found." });
-  if (!["SUCCESS", "UNCLAIMED"].includes(item.state))
+  if (item.state !== "SUCCESS")
     return res
       .status(409)
       .json({
