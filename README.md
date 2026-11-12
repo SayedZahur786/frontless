@@ -111,3 +111,7 @@ node --env-file=.env scripts/smoke-paypal.mjs
 ```
 
 This sends PayPal's documented `POSPYO001` test value to its sandbox Payouts endpoint using your sandbox app's OAuth credentials. It requests a USD 1.00 **response simulation**, not a real volunteer advance. A 201 test response proves the API interaction, not money movement or receipt by a volunteer. The app's GBP travel workflow is a separate flow. See [PayPal's test-values guide](https://developer.paypal.com/api/payouts/test-go-live).
+
+### Verified sandbox API result
+
+On 13 November 2026 (IST), the authenticated response-simulator smoke test returned HTTP **201**, sandbox batch ID `83TEPJXBQJXZE`, batch status `PENDING`, using PayPal's documented `POSPYO001` test value. OAuth and the Payouts request were executed against PayPal's sandbox. This is **simulator evidence, not proof of an actual volunteer payment or completed money movement**. The demo recording separately labels its UI approval transition as simulated.
