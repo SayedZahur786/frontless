@@ -103,3 +103,11 @@ Not production-ready: no identity verification, multi-user volunteer authenticat
 ## License
 
 MIT. The model and third-party dependencies retain their own licenses. See the model card and npm package notices.
+
+### Authenticated response-simulator smoke test
+
+```sh
+node --env-file=.env scripts/smoke-paypal.mjs
+```
+
+This sends PayPal's documented `POSPYO001` test value to its sandbox Payouts endpoint using your sandbox app's OAuth credentials. It requests a USD 1.00 **response simulation**, not a real volunteer advance. A 201 test response proves the API interaction, not money movement or receipt by a volunteer. The app's GBP travel workflow is a separate flow. See [PayPal's test-values guide](https://developer.paypal.com/api/payouts/test-go-live).
