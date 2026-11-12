@@ -2,7 +2,6 @@
 
 **Show up. Not out of pocket.**
 
-[![CI](https://github.com/SayedZahur786/frontless/actions/workflows/ci.yml/badge.svg)](https://github.com/SayedZahur786/frontless/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Status: sandbox prototype](https://img.shields.io/badge/status-sandbox%20prototype-orange)
 
@@ -16,7 +15,7 @@ Frontless turns a volunteer's travel request into a policy cited, human approved
 
 - **Problem:** volunteers who cannot afford to pay for travel first often do not volunteer at all, and treasurers check each claim by hand.
 - **What Frontless does:** a browser model finds the policy clause closest to the request, code enforces the cap and budget, a treasurer approves, and a PayPal sandbox payout is prepared. A receipt is reconciled afterwards.
-- **Proof, stated plainly:** 9 unit tests pass in CI, the AI runs for real in the browser, and the PayPal sandbox accepted a Payouts request (HTTP 201, `PENDING`, simulator only). No real money moved. See [Limitations](#limitations).
+- **Proof, stated plainly:** 9 unit tests pass locally, the AI runs for real in the browser, and the PayPal sandbox accepted a Payouts request (HTTP 201, `PENDING`, simulator only). No real money moved. See [Limitations](#limitations).
 
 ## The problem
 
@@ -139,7 +138,7 @@ OAuth credentials stay on the server and are used only against `https://api-m.sa
 npm test
 ```
 
-Unit tests cover money parsing, malformed input, the policy cap, recipient validation and reconciliation. CI runs install, tests and build on every push and pull request. Browser checks of the AI run, the simulated approval flow, reconciliation and mobile widths were done manually and are not part of CI.
+Unit tests cover money parsing, malformed input, the policy cap, recipient validation and reconciliation. Browser checks of the AI run, the simulated approval flow, reconciliation and mobile widths were done manually and are not automated.
 
 ## Hosting
 
