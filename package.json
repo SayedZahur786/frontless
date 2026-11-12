@@ -1,0 +1,25 @@
+{
+  "name": "frontless",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "3.7.3",
+    "express": "4.22.3"
+  },
+  "devDependencies": {
+    "vite": "6.4.6"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
+  }
+}
