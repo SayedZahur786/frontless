@@ -1,17 +1,184 @@
-import express from 'express';import {randomUUID,timingSafeEqual} from 'node:crypto';import fs from 'node:fs';import path from 'node:path';import {POLICY,validateRequest,reconcile} from './domain.js';import {sendAdvance,payoutStatus} from './paypal.js';
-const app=express();app.disable('x-powered-by');app.use(express.json({limit:'32kb'}));
-const file=process.env.DATA_FILE||'./data/requests.json';let rows={};try{rows=JSON.parse(fs.readFileSync(file,'utf8'));}catch{}
-function save(){fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file+'.tmp',JSON.stringify(rows,null,2),{mode:0o600});fs.renameSync(file+'.tmp',file);}
-function auth(req,res,next){const expected=process.env.TREASURER_TOKEN;const got=req.get('x-treasurer-token')||'';if(!expected)return res.status(503).json({error:'Set TREASURER_TOKEN before using the backend.'});if(got.length!==expected.length||!timingSafeEqual(Buffer.from(got),Buffer.from(expected)))return res.status(401).json({error:'Treasurer access required.'});next();}
-app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('Cache-Control','no-store');next();});
-app.get('/api/health',(req,res)=>res.json({service:'frontless',sandbox:true,paypalConfigured:!!(process.env.PAYPAL_CLIENT_ID&&process.env.PAYPAL_CLIENT_SECRET),policy:POLICY}));
-app.get('/api/requests',auth,(req,res)=>res.json(Object.values(rows)));
-app.post('/api/requests',auth,(req,res)=>{try{const item={...validateRequest(req.body),id:randomUUID(),state:'AWAITING_APPROVAL',createdAt:new Date().toISOString(),audit:[{event:'REQUEST_CREATED',at:new Date().toISOString()}]};rows[item.id]=item;save();res.status(201).json(item);}catch(e){res.status(400).json({error:e.message});}});
-app.post('/api/requests/:id/approve',auth,async(req,res)=>{const item=rows[req.params.id];if(!item)return res.status(404).json({error:'Request not found.'});if(req.body.confirmed!==true)return res.status(400).json({error:'Confirm recipient, amount and policy before approving.'});if(item.batchId||item.state==='SENDING')return res.status(409).json({error:'This request already has a payout attempt. Refresh its status; do not send again.'});
- if(item.state!=='AWAITING_APPROVAL')return res.status(409).json({error:'Request is not awaiting approval.'});
- const reserved=Object.values(rows).filter(x=>['SENDING','SUBMITTED','SUCCESS','UNCLAIMED'].includes(x.state)).reduce((s,x)=>s+x.amountMinor,0);if(reserved+item.amountMinor>POLICY.budgetMinor)return res.status(409).json({error:'Insufficient charity travel budget.'});
- item.state='SENDING';item.audit.push({event:'TREASURER_APPROVED',at:new Date().toISOString()});save();try{const result=await sendAdvance(item);item.batchId=result.batch_header.payout_batch_id;item.batchStatus=result.batch_header.batch_status;item.state='SUBMITTED';item.audit.push({event:'PAYPAL_BATCH_SUBMITTED',batchId:item.batchId,at:new Date().toISOString()});save();res.json(item);}catch(e){item.state='REVIEW_REQUIRED';item.audit.push({event:'PAYOUT_RESPONSE_UNCERTAIN',at:new Date().toISOString()});save();res.status(502).json({error:e.message,request:item,hint:'Review the PayPal sandbox dashboard before retrying. An uncertain response is not proof the payout failed.'});}});
-app.get('/api/requests/:id/status',auth,async(req,res)=>{const item=rows[req.params.id];if(!item?.batchId)return res.status(404).json({error:'No payout batch for this request.'});try{const result=await payoutStatus(item.batchId);const pi=result.items?.[0];item.batchStatus=result.batch_header?.batch_status;item.transactionStatus=pi?.transaction_status||null;item.state=['SUCCESS','UNCLAIMED','FAILED','RETURNED','BLOCKED','DENIED'].includes(item.transactionStatus)?item.transactionStatus:'SUBMITTED';save();res.json(item);}catch(e){res.status(502).json({error:e.message});}});
-app.post('/api/requests/:id/reconcile',auth,(req,res)=>{const item=rows[req.params.id];if(!item)return res.status(404).json({error:'Request not found.'});if(!['SUCCESS','UNCLAIMED'].includes(item.state))return res.status(409).json({error:'Confirm the payout item status before recording a receipt.'});try{item.reconciliation=reconcile(item.amountMinor,req.body.amount);item.audit.push({event:'RECEIPT_TOTAL_RECORDED',at:new Date().toISOString()});save();res.json(item);}catch(e){res.status(400).json({error:e.message});}});
-app.use(express.static(path.resolve('dist')));app.get('*',(req,res)=>res.sendFile(path.resolve('dist/index.html')));app.use((err,req,res,next)=>res.status(400).json({error:'Invalid request.'}));
-const port=process.env.PORT||3000;app.listen(port,()=>console.log(`Frontless running on port ${port}. Sandbox only.`));
+import express from "express";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { POLICY, validateRequest, reconcile } from "./domain.js";
+import { sendAdvance, payoutStatus } from "./paypal.js";
+const app = express();
+app.disable("x-powered-by");
+app.use(express.json({ limit: "32kb" }));
+const file = process.env.DATA_FILE || "./data/requests.json";
+let rows = {};
+try {
+  rows = JSON.parse(fs.readFileSync(file, "utf8"));
+} catch {}
+function save() {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file + ".tmp", JSON.stringify(rows, null, 2), {
+    mode: 0o600,
+  });
+  fs.renameSync(file + ".tmp", file);
+}
+function auth(req, res, next) {
+  const expected = process.env.TREASURER_TOKEN;
+  const got = req.get("x-treasurer-token") || "";
+  if (!expected)
+    return res
+      .status(503)
+      .json({ error: "Set TREASURER_TOKEN before using the backend." });
+  if (
+    got.length !== expected.length ||
+    !timingSafeEqual(Buffer.from(got), Buffer.from(expected))
+  )
+    return res.status(401).json({ error: "Treasurer access required." });
+  next();
+}
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+app.get("/api/health", (req, res) =>
+  res.json({
+    service: "frontless",
+    sandbox: true,
+    paypalConfigured: !!(
+      process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET
+    ),
+    policy: POLICY,
+  }),
+);
+app.get("/api/requests", auth, (req, res) => res.json(Object.values(rows)));
+app.post("/api/requests", auth, (req, res) => {
+  try {
+    const item = {
+      ...validateRequest(req.body),
+      id: randomUUID(),
+      state: "AWAITING_APPROVAL",
+      createdAt: new Date().toISOString(),
+      audit: [{ event: "REQUEST_CREATED", at: new Date().toISOString() }],
+    };
+    rows[item.id] = item;
+    save();
+    res.status(201).json(item);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.post("/api/requests/:id/approve", auth, async (req, res) => {
+  const item = rows[req.params.id];
+  if (!item) return res.status(404).json({ error: "Request not found." });
+  if (req.body.confirmed !== true)
+    return res
+      .status(400)
+      .json({
+        error: "Confirm recipient, amount and policy before approving.",
+      });
+  if (item.batchId || item.state === "SENDING")
+    return res
+      .status(409)
+      .json({
+        error:
+          "This request already has a payout attempt. Refresh its status; do not send again.",
+      });
+  if (item.state !== "AWAITING_APPROVAL")
+    return res.status(409).json({ error: "Request is not awaiting approval." });
+  const reserved = Object.values(rows)
+    .filter((x) =>
+      ["SENDING", "SUBMITTED", "SUCCESS", "UNCLAIMED"].includes(x.state),
+    )
+    .reduce((s, x) => s + x.amountMinor, 0);
+  if (reserved + item.amountMinor > POLICY.budgetMinor)
+    return res
+      .status(409)
+      .json({ error: "Insufficient charity travel budget." });
+  item.state = "SENDING";
+  item.audit.push({
+    event: "TREASURER_APPROVED",
+    at: new Date().toISOString(),
+  });
+  save();
+  try {
+    const result = await sendAdvance(item);
+    item.batchId = result.batch_header.payout_batch_id;
+    item.batchStatus = result.batch_header.batch_status;
+    item.state = "SUBMITTED";
+    item.audit.push({
+      event: "PAYPAL_BATCH_SUBMITTED",
+      batchId: item.batchId,
+      at: new Date().toISOString(),
+    });
+    save();
+    res.json(item);
+  } catch (e) {
+    item.state = "REVIEW_REQUIRED";
+    item.audit.push({
+      event: "PAYOUT_RESPONSE_UNCERTAIN",
+      at: new Date().toISOString(),
+    });
+    save();
+    res
+      .status(502)
+      .json({
+        error: e.message,
+        request: item,
+        hint: "Review the PayPal sandbox dashboard before retrying. An uncertain response is not proof the payout failed.",
+      });
+  }
+});
+app.get("/api/requests/:id/status", auth, async (req, res) => {
+  const item = rows[req.params.id];
+  if (!item?.batchId)
+    return res.status(404).json({ error: "No payout batch for this request." });
+  try {
+    const result = await payoutStatus(item.batchId);
+    const pi = result.items?.[0];
+    item.batchStatus = result.batch_header?.batch_status;
+    item.transactionStatus = pi?.transaction_status || null;
+    item.state = [
+      "SUCCESS",
+      "UNCLAIMED",
+      "FAILED",
+      "RETURNED",
+      "BLOCKED",
+      "DENIED",
+    ].includes(item.transactionStatus)
+      ? item.transactionStatus
+      : "SUBMITTED";
+    save();
+    res.json(item);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+app.post("/api/requests/:id/reconcile", auth, (req, res) => {
+  const item = rows[req.params.id];
+  if (!item) return res.status(404).json({ error: "Request not found." });
+  if (!["SUCCESS", "UNCLAIMED"].includes(item.state))
+    return res
+      .status(409)
+      .json({
+        error: "Confirm the payout item status before recording a receipt.",
+      });
+  try {
+    item.reconciliation = reconcile(item.amountMinor, req.body.amount);
+    item.audit.push({
+      event: "RECEIPT_TOTAL_RECORDED",
+      at: new Date().toISOString(),
+    });
+    save();
+    res.json(item);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+app.use(express.static(path.resolve("dist")));
+app.get("*", (req, res) => res.sendFile(path.resolve("dist/index.html")));
+app.use((err, req, res, next) =>
+  res.status(400).json({ error: "Invalid request." }),
+);
+const port = process.env.PORT || 3000;
+app.listen(port, () =>
+  console.log(`Frontless running on port ${port}. Sandbox only.`),
+);

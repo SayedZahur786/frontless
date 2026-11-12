@@ -1,11 +1,54 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {minor,validateRequest,reconcile} from '../server/domain.js';
-const valid={name:'Alex Morgan',email:'alex@example.test',description:'Return bus fare for community kitchen shift',amount:'12.00',shift:'2026-11-14'};
-test('money is converted to integer pennies without float drift',()=>{assert.equal(minor('12.00'),1200);assert.equal(minor('11.2'),1120);assert.equal(minor('0.01'),1);});
-test('negative, malformed, zero and excess precision are rejected',()=>{for(const s of ['-1','0','0.00','NaN','1.001','1e3','12 pounds',''])assert.throws(()=>minor(s));});
-test('valid request is normalised',()=>assert.equal(validateRequest({...valid,email:' Alex@Example.test '}).email,'alex@example.test'));
-test('policy cap cannot be overridden by client',()=>assert.throws(()=>validateRequest({...valid,amount:'15.01',capMinor:5000})));
-test('invalid recipient, dates and empty descriptions rejected',()=>{for(const patch of [{email:'not email'},{shift:'tomorrow'},{description:''},{name:'A'}])assert.throws(()=>validateRequest({...valid,...patch}));});
-test('reconciliation records outstanding return, not automatic debit',()=>{assert.deepEqual(reconcile(1200,'11.20'),{actualMinor:1120,unspentMinor:80,extraMinor:0,state:'RETURN_OUTSTANDING'});});
-test('exact and over budget receipts have distinct states',()=>{assert.equal(reconcile(1200,'12.00').state,'RECONCILED');assert.equal(reconcile(1200,'13.25').extraMinor,125);assert.equal(reconcile(1200,'13.25').state,'EXTRA_REVIEW');});
-test('zero receipt records full outstanding return',()=>assert.equal(reconcile(1200,'0.00').unspentMinor,1200));
-test('impossible calendar dates rejected',()=>assert.throws(()=>validateRequest({...valid,shift:'2026-02-30'})));
+import test from "node:test";
+import assert from "node:assert/strict";
+import { minor, validateRequest, reconcile } from "../server/domain.js";
+const valid = {
+  name: "Alex Morgan",
+  email: "alex@example.test",
+  description: "Return bus fare for community kitchen shift",
+  amount: "12.00",
+  shift: "2026-11-14",
+};
+test("money is converted to integer pennies without float drift", () => {
+  assert.equal(minor("12.00"), 1200);
+  assert.equal(minor("11.2"), 1120);
+  assert.equal(minor("0.01"), 1);
+});
+test("negative, malformed, zero and excess precision are rejected", () => {
+  for (const s of ["-1", "0", "0.00", "NaN", "1.001", "1e3", "12 pounds", ""])
+    assert.throws(() => minor(s));
+});
+test("valid request is normalised", () =>
+  assert.equal(
+    validateRequest({ ...valid, email: " Alex@Example.test " }).email,
+    "alex@example.test",
+  ));
+test("policy cap cannot be overridden by client", () =>
+  assert.throws(() =>
+    validateRequest({ ...valid, amount: "15.01", capMinor: 5000 }),
+  ));
+test("invalid recipient, dates and empty descriptions rejected", () => {
+  for (const patch of [
+    { email: "not email" },
+    { shift: "tomorrow" },
+    { description: "" },
+    { name: "A" },
+  ])
+    assert.throws(() => validateRequest({ ...valid, ...patch }));
+});
+test("reconciliation records outstanding return, not automatic debit", () => {
+  assert.deepEqual(reconcile(1200, "11.20"), {
+    actualMinor: 1120,
+    unspentMinor: 80,
+    extraMinor: 0,
+    state: "RETURN_OUTSTANDING",
+  });
+});
+test("exact and over budget receipts have distinct states", () => {
+  assert.equal(reconcile(1200, "12.00").state, "RECONCILED");
+  assert.equal(reconcile(1200, "13.25").extraMinor, 125);
+  assert.equal(reconcile(1200, "13.25").state, "EXTRA_REVIEW");
+});
+test("zero receipt records full outstanding return", () =>
+  assert.equal(reconcile(1200, "0.00").unspentMinor, 1200));
+test("impossible calendar dates rejected", () =>
+  assert.throws(() => validateRequest({ ...valid, shift: "2026-02-30" })));
